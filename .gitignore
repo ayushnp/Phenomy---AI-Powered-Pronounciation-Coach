@@ -9,5 +9,12 @@ __pycache__/
 venv/
 
 # IDE configuration files
+# Dependencies
+node_modules/
+
+# IDE configuration
 .idea/
 .vscode/
+
+# User-generated content
+uploads/
