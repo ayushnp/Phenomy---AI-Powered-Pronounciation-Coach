@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Speech Scoring</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center">
+  <div class="bg-white p-8 rounded-2xl shadow-lg w-full max-w-lg space-y-6">
+    <h1 class="text-2xl font-bold text-center text-gray-800">Speech Scoring</h1>
+    <h2 class="text-lg font-medium text-gray-700">MAKING NEW FRIENDS AS AN ADULT CAN BE CHALLENGING BUT REWARDING JOINING CLUBS AND ATTENDING SOCIAL EVENTS CREATES OPPORTUNITIES TO MEET LIKE MINDED PEOPLE BEING GENUINELY INTERESTED IN OTHERS AND SHOWING KINDNESS HELPS BUILD LASTING FRIENDSHIPS</h2>
+    
+    <!-- Upload Section -->
+    <div class="space-y-2">
+      <label for="fileInput" class="block font-medium text-gray-700">Upload Audio File</label>
+      <input id="fileInput" type="file" accept="audio/*"
+             class="w-full border border-gray-300 rounded-lg px-3 py-2">
+      <button id="uploadButton"
+              class="mt-3 w-full bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition">
+        Upload & Score
+      </button>
+    </div>
+
+    <div class="relative my-4">
+      <hr class="border-t border-gray-300">
+      <span class="absolute inset-x-0 -top-3 text-center bg-white text-gray-500 px-2">or</span>
+    </div>
+
+    <!-- Recording Section -->
+    <div class="space-y-4 text-center">
+      <!-- Start Recording Button -->
+      <button id="recordButton"
+              class="bg-red-600 text-white px-6 py-3 rounded-xl hover:bg-red-700 transition flex items-center space-x-2 mx-auto">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v12m6-6H6"></path>
+        </svg>
+        <span>Start Recording</span>
+      </button>
+
+      <!-- Stop Recording Button -->
+      <button id="stopButton"
+              class="hidden bg-gray-600 text-white px-6 py-3 rounded-xl hover:bg-gray-700 transition flex items-center space-x-2 mx-auto">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+        <span>Stop Recording</span>
+      </button>
+
+      <!-- Timer -->
+      <div id="recordingTimer" class="text-lg font-semibold text-red-600">00:00</div>
+
+      <!-- Audio Level Visualizer -->
+      <div class="w-full h-3 bg-gray-200 rounded-full overflow-hidden">
+        <div id="audioLevel" class="h-full bg-green-500 w-0 transition-all"></div>
+      </div>
+    </div>
+
+    <!-- Result Section -->
+    <div id="result" class="mt-6 text-center text-gray-700 font-medium"></div>
+  </div>
+
+  <script>
+    let mediaRecorder;
+    let audioChunks = [];
+    let analyser, dataArray, animationId;
+    let recordingStartTime, recordingTimer;
+
+    // Upload button
+    document.getElementById("uploadButton").addEventListener("click", async () => {
+      const fileInput = document.getElementById("fileInput");
+      if (!fileInput.files.length) {
+        alert("Please select a file first!");
+        return;
+      }
+      const file = fileInput.files[0];
+      await uploadFile(file);
+    });
+
+    // Start Recording
+    document.getElementById("recordButton").addEventListener("click", async () => {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorder = new MediaRecorder(stream);
+      audioChunks = [];
+
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const source = audioContext.createMediaStreamSource(stream);
+      analyser = audioContext.createAnalyser();
+      analyser.fftSize = 256;
+      dataArray = new Uint8Array(analyser.frequencyBinCount);
+      source.connect(analyser);
+
+      mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+
+      mediaRecorder.onstart = () => {
+        document.getElementById("recordButton").classList.add("hidden");
+        document.getElementById("stopButton").classList.remove("hidden");
+        document.getElementById("result").textContent = "";
+        recordingStartTime = Date.now();
+        startTimer();
+        visualizeAudio();
+      };
+
+      mediaRecorder.onstop = async () => {
+        clearInterval(recordingTimer);
+        cancelAnimationFrame(animationId);
+        document.getElementById("recordButton").classList.remove("hidden");
+        document.getElementById("stopButton").classList.add("hidden");
+
+        const audioBlob = new Blob(audioChunks, { type: "audio/wav" });
+        await uploadFile(audioBlob);
+      };
+
+      mediaRecorder.start();
+    });
+
+    // Stop Recording
+    document.getElementById("stopButton").addEventListener("click", () => {
+      if (mediaRecorder && mediaRecorder.state === "recording") {
+        mediaRecorder.stop();
+      }
+    });
+
+    // Timer
+    function startTimer() {
+      recordingTimer = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - recordingStartTime) / 1000);
+        const minutes = String(Math.floor(elapsed / 60)).padStart(2, '0');
+        const seconds = String(elapsed % 60).padStart(2, '0');
+        document.getElementById("recordingTimer").textContent = `${minutes}:${seconds}`;
+      }, 1000);
+    }
+
+    // Audio Visualizer
+    function visualizeAudio() {
+      if (!analyser || !dataArray) return;
+      analyser.getByteFrequencyData(dataArray);
+      let sum = 0;
+      for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
+      const average = sum / dataArray.length;
+      const level = Math.min(100, (average / 255) * 100);
+      document.getElementById("audioLevel").style.width = level + "%";
+      animationId = requestAnimationFrame(visualizeAudio);
+    }
+
+    // SpeechSynthesis function
+    function speakWord(word) {
+      const utterance = new SpeechSynthesisUtterance(word);
+      utterance.lang = "en-US";
+      speechSynthesis.cancel(); // Stop ongoing speech for clarity
+      speechSynthesis.speak(utterance);
+    }
+
+    // Upload function (to backend API)
+    async function uploadFile(file) {
+      const formData = new FormData();
+      formData.append("audio_file", file, "recording.wav");
+      formData.append("domain", "social");
+      formData.append("paragraph_number", "1");
+
+      document.getElementById("result").textContent = "Processing...";
+
+      try {
+        const response = await fetch("http://127.0.0.1:5000/analyze", {
+          method: "POST",
+          body: formData
+        });
+
+        if (!response.ok) throw new Error("Upload failed");
+        const result = await response.json();
+        console.log(result);
+
+        if (result.word_lists) {
+          const correctWords = result.word_lists.correct_words?.join(", ") || "none";
+          const wrongWordsArr = result.word_lists.wrong_words || [];
+
+          // Create wrong word buttons dynamically and set up handlers
+          let wrongWordsButtonsHtml = '<div id="wrongWordBtns">';
+          wrongWordsArr.forEach(word => {
+            wrongWordsButtonsHtml += `
+              <button
+                type="button"
+                class="inline-block bg-red-100 text-red-700 rounded px-2 py-1 m-1 text-sm font-semibold hover:bg-red-200 transition"
+                onclick="window.speechSynthesis.cancel(); window.speechSynthesis.speak(new SpeechSynthesisUtterance('${word}'))"
+              >${word}</button>`;
+          });
+          wrongWordsButtonsHtml += "</div>";
+
+          const totalCount = (result.word_lists.correct_words?.length || 0) + wrongWordsArr.length;
+          const percent = totalCount > 0
+            ? ((result.word_lists.correct_words?.length || 0) / totalCount * 100).toFixed(2)
+            : "0.00";
+
+          document.getElementById("result").innerHTML =
+            `<div class="mb-2"><strong>Correct words:</strong> <span class="text-green-700">${correctWords}</span></div>
+             <div><strong>Wrong words:</strong> ${wrongWordsButtonsHtml}</div>
+             <div><strong>Percentage:</strong> <span class="text-blue-700">${percent}%</span></div>`;
+        }
+        else {
+          document.getElementById("result").textContent = "No word list received.";
+        }
+      } catch (error) {
+        console.error(error);
+        document.getElementById("result").textContent = "Error processing file.";
+      }
+    }
+  </script>
+</body>
+</html>

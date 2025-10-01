@@ -1,0 +1,8 @@
+# Dependencies
+node_modules/
+
+# IDE configuration
+.idea/
+
+# User-generated content
+uploads/
